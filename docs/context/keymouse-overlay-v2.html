@@ -1,0 +1,366 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>键鼠操作可视化 v2 · 键帽风 + 鼠标图形</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: #f2f3f6; color: #2b2b35; font: 14px/1.6 "Segoe UI", "Microsoft YaHei", system-ui, sans-serif; padding: 26px 26px 60px; }
+  .wrap { max-width: 1080px; margin: 0 auto; }
+  h1 { font-size: 17px; margin-bottom: 4px; }
+  .lead { font-size: 12.5px; color: #6b6b78; margin-bottom: 18px; }
+  .lead b { color: #4f7cff; }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+  @media (max-width: 920px) { .grid { grid-template-columns: 1fr; } }
+  .card { background: #fff; border: 1px solid #e6e6ea; border-radius: 12px; padding: 12px; box-shadow: 0 1px 3px rgba(17,17,26,.06); }
+  .card h3 { font-size: 13px; margin: 2px 2px 10px; color: #4a4a55; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .card h3 .rec { font-size: 11px; color: #fff; background: #4f7cff; border-radius: 999px; padding: 1px 9px; font-weight: 500; }
+  .card h3 .sub { font-size: 11.5px; color: #8a8a96; font-weight: 400; }
+  .card.full { grid-column: 1 / -1; }
+
+  .screen { position: relative; width: 100%; aspect-ratio: 16 / 9; border-radius: 10px; overflow: hidden; background: #101318; }
+  .win { position: absolute; border-radius: 6px; background: linear-gradient(160deg, #232937, #1b202b); border: 1px solid #2e3648; }
+  .win .bar { height: 22px; border-bottom: 1px solid #2e3648; background: #252c3b; border-radius: 6px 6px 0 0; display: flex; align-items: center; gap: 5px; padding: 0 8px; }
+  .win .bar i { width: 7px; height: 7px; border-radius: 50%; background: #3a4358; display: inline-block; }
+  .taskbar { position: absolute; left: 0; right: 0; bottom: 0; height: 30px; background: rgba(16,19,26,.9); border-top: 1px solid #262e3d; display: flex; align-items: center; justify-content: center; gap: 8px; }
+  .taskbar i { width: 16px; height: 16px; border-radius: 4px; background: #2c3448; display: inline-block; }
+
+  .cursor { position: absolute; width: 20px; height: 20px; z-index: 40; pointer-events: none;
+            transition: left .45s cubic-bezier(.25,.8,.3,1), top .45s cubic-bezier(.25,.8,.3,1); }
+  .cursor svg { width: 100%; height: 100%; filter: drop-shadow(0 1px 2px rgba(0,0,0,.55)); }
+  .stage { position: absolute; inset: 0; z-index: 35; pointer-events: none; }
+
+  .ripple { position: absolute; width: 14px; height: 14px; margin: -7px 0 0 -7px; border-radius: 50%; }
+  .ripple::before, .ripple::after { content: ""; position: absolute; inset: 0; border-radius: 50%; border: 2.5px solid currentColor; animation: rip .8s cubic-bezier(.2,.7,.3,1) forwards; }
+  .ripple::after { animation-delay: .12s; }
+  @keyframes rip { 0% { transform: scale(.5); opacity: 1; } 100% { transform: scale(4.6); opacity: 0; } }
+  .ripple .dot { position: absolute; left: 50%; top: 50%; width: 6px; height: 6px; margin: -3px; border-radius: 50%; background: currentColor; animation: dotfade .55s ease forwards; }
+  @keyframes dotfade { 0% { opacity: 1; transform: scale(1.3); } 100% { opacity: 0; transform: scale(.7); } }
+  .click-l { color: #4f9bff; } .click-r { color: #ff6a5e; } .click-m { color: #ffc24d; } .click-s { color: #b07cff; }
+
+  .wheel-hint { position: absolute; z-index: 36; margin-left: 18px; margin-top: -20px; font-size: 11px; font-weight: 700; letter-spacing: .06em; color: #fff;
+                background: rgba(20,24,32,.82); border-radius: 999px; padding: 3px 10px; animation: wfade 1s ease forwards; white-space: nowrap; }
+  @keyframes wfade { 0% { opacity: 0; transform: translateY(4px); } 18% { opacity: 1; transform: none; } 75% { opacity: 1; } 100% { opacity: 0; transform: translateY(-6px); } }
+
+  /* ================= 键帽（含 按下 / 松开 / 重复计数） ================= */
+  .hud { position: absolute; right: 18px; bottom: 42px; z-index: 38; display: flex; align-items: flex-end; gap: 8px; }
+  .combo { position: relative; display: flex; gap: 5px; align-items: flex-end; animation: keyIn .3s cubic-bezier(.2,.9,.25,1); }
+  .combo.small { zoom: .85; }
+  .key {
+    min-width: 34px; padding: 7px 11px 9px; border-radius: 9px; text-align: center;
+    font-weight: 700; font-size: 15px; color: #23283a;
+    background: linear-gradient(#fff, #eef0f5);
+    box-shadow: 0 3px 0 #b9bfcc, 0 6px 14px rgba(0,0,0,.38);
+    text-shadow: 0 1px 0 #fff;
+    transition: transform .06s ease, box-shadow .06s ease, background .06s ease;
+  }
+  .key.mod { color: #5a6070; font-size: 12px; padding: 7px 9px 9px; background: linear-gradient(#eceef3, #dde0e8); box-shadow: 0 3px 0 #a9afbd, 0 6px 14px rgba(0,0,0,.35); }
+  /* 按下态：键帽下沉 + 底缘阴影收短（物理按压感） */
+  .key.pressed { transform: translateY(3px); box-shadow: 0 0.5px 0 #b9bfcc, 0 3px 8px rgba(0,0,0,.3); background: linear-gradient(#f2f5ff, #e2e9fb); }
+  .key.mod.pressed { box-shadow: 0 0.5px 0 #a9afbd, 0 3px 8px rgba(0,0,0,.3); background: linear-gradient(#e4e8f5, #d5dbeb); }
+  /* 重复计数角标 */
+  .combo .cnt {
+    position: absolute; right: -9px; top: -10px; min-width: 22px; padding: 1px 5px; border-radius: 999px;
+    background: linear-gradient(#ff7264, #f0483a); color: #fff; font: 700 11px/1.5 "Segoe UI", sans-serif;
+    box-shadow: 0 2px 6px rgba(240,72,58,.5); animation: cntPop .18s ease;
+  }
+  @keyframes cntPop { 0% { transform: scale(.6); } 100% { transform: scale(1); } }
+  /* 仅做「进场弹入」；停留时长与淡出交给 JS（releaseCombo），以支持长按与重复计数 */
+  @keyframes keyIn {
+    0% { transform: translateY(10px) scale(.7); opacity: 0; }
+    55% { transform: translateY(0) scale(1.06); opacity: 1; }
+    75% { transform: scale(.96); }
+    100% { transform: scale(1); opacity: 1; }
+  }
+
+  /* ================= 鼠标图形（3 款外观） ================= */
+  .mouse-fig { position: absolute; z-index: 39; width: 46px; height: 74px; pointer-events: none; }
+  .mouse-fig svg { width: 100%; height: 100%; display: block; }
+  .mf-body { fill: none; stroke: #fff; stroke-width: 1.6; }
+  .mf-btn { fill: rgba(255,255,255,.06); stroke: #fff; stroke-width: 1.2; transition: fill .08s ease; }
+  .mf-wheel { fill: rgba(255,255,255,.22); stroke: #fff; stroke-width: 1; }
+  .mf-side { fill: rgba(255,255,255,.12); stroke: #fff; stroke-width: 1; }
+  .mf-div { stroke: rgba(255,255,255,.5); stroke-width: 1; }
+  .mouse-fig .hit-l { fill: rgba(79,155,255,.75); } .mouse-fig .hit-r { fill: rgba(255,106,94,.75); }
+  .mouse-fig .hit-m { fill: rgba(255,194,77,.85); } .mouse-fig .hit-s { fill: rgba(176,124,255,.8); }
+  .mouse-fig .hit-wheel { fill: rgba(120,220,255,.6); }
+
+  /* 款 1：线框（贴角落、常驻淡显、事件高亮） */
+  [data-mouse="wire"] .mouse-fig { right: 20px; bottom: 128px; opacity: .38; transition: opacity .25s ease; }
+  [data-mouse="wire"] .mouse-fig.live { opacity: 1; filter: drop-shadow(0 0 10px rgba(120,190,255,.45)); }
+
+  /* 款 2：拟物实底（角落常驻） */
+  [data-mouse="solid"] .mouse-fig { right: 22px; bottom: 126px; opacity: .94; }
+  [data-mouse="solid"] .mf-body { fill: #343b4b; stroke: #59637a; }
+  [data-mouse="solid"] .mf-btn { fill: #2c3241; stroke: #59637a; }
+  [data-mouse="solid"] .mf-wheel { fill: #4a5568; stroke: #6b7793; }
+  [data-mouse="solid"] .mf-side { fill: #444d61; stroke: #6b7793; }
+  [data-mouse="solid"] .mf-div { stroke: rgba(255,255,255,.22); }
+  [data-mouse="solid"] .mouse-fig.live { filter: drop-shadow(0 0 12px rgba(120,190,255,.5)); }
+
+  /* 款 3：跟随光标浮现 */
+  [data-mouse="follow"] .mouse-fig { left: 0; top: 0; width: 40px; height: 64px; opacity: 0; transition: left .35s cubic-bezier(.25,.8,.3,1), top .35s cubic-bezier(.25,.8,.3,1), opacity .2s ease; }
+  [data-mouse="follow"] .mouse-fig.pop { opacity: 1; animation: figPop .25s ease; }
+  @keyframes figPop { 0% { transform: scale(.75); } 100% { transform: scale(1); } }
+
+  .label { position: absolute; left: 10px; top: 10px; z-index: 50; font-size: 11px; color: #cfd6e4;
+           background: rgba(16,19,26,.72); border: 1px solid rgba(255,255,255,.14); border-radius: 7px; padding: 3px 9px; }
+  .phase { position: absolute; left: 12px; top: 12px; z-index: 50; font-size: 12px; color: #9fb6dd; }
+  .foot { margin-top: 16px; font-size: 12px; color: #8a8a96; }
+  .foot b { color: #5a5a66; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>键鼠操作可视化 v2 — 键帽风 + 鼠标图形（实时演示）</h1>
+  <div class="lead">键盘：<b>按下 / 松开 / 重复按下计数</b>；鼠标：光标涟漪 + <b>鼠标图形对应按键高亮</b>（左/右/中/滚轮/侧键）。关掉页面再打开可重新看完整循环。</div>
+
+  <div class="grid">
+    <!-- 屏 1：键盘三态特写 -->
+    <div class="card full">
+      <h3>屏 1 · 键盘三态特写 <span class="sub">按下（下沉）→ 松开（回弹+淡出）· 按住重复 → 右上角计 ×N · 组合键并排</span></h3>
+      <div class="screen" data-scene="kb" style="aspect-ratio: 21/6;">
+        <div class="phase" id="kbPhase">—</div>
+        <div class="hud" id="kbHud" style="left:50%; right:auto; bottom:auto; top:50%; transform:translate(-50%,-50%); zoom:1.6"></div>
+        <div class="label">1 · 键盘三态</div>
+      </div>
+    </div>
+
+    <!-- 屏 2：鼠标款 1 线框 -->
+    <div class="card">
+      <h3>屏 2 · 鼠标款 A「线框」<span class="sub">常驻淡显贴右下角，事件时亮起高亮</span></h3>
+      <div class="screen" data-scene="mouse" data-mouse="wire">
+        <div class="win" style="left:5%;top:9%;width:45%;height:50%"><div class="bar"><i></i><i></i><i></i></div></div>
+        <div class="win" style="left:55%;top:15%;width:40%;height:44%"><div class="bar"><i></i><i></i><i></i></div></div>
+        <div class="taskbar"><i></i><i></i><i></i><i></i><i></i></div>
+        <div class="stage"></div>
+        <div class="hud"></div>
+        <svg class="cursor" viewBox="0 0 24 24"><path d="M5.5 3.2 19 11.4l-6.2 1.3L9.4 19z" fill="#fff" stroke="#111" stroke-width="1.4" stroke-linejoin="round"/></svg>
+        <div class="label">2 · 鼠标款 A</div>
+      </div>
+    </div>
+
+    <!-- 屏 3：鼠标款 2 拟物 + 跟随光标 -->
+    <div class="card">
+      <h3>屏 3 · 鼠标款 B「拟物」<span class="sub">深色实底；比 A 更醒目（此屏演示「跟随光标浮现」，A/B 都可二选一）</span></h3>
+      <div class="screen" data-scene="mouse" data-mouse="solid">
+        <div class="win" style="left:6%;top:8%;width:44%;height:52%"><div class="bar"><i></i><i></i><i></i></div></div>
+        <div class="win" style="left:54%;top:16%;width:38%;height:44%"><div class="bar"><i></i><i></i><i></i></div></div>
+        <div class="taskbar"><i></i><i></i><i></i><i></i><i></i></div>
+        <div class="stage"></div>
+        <div class="hud"></div>
+        <svg class="cursor" viewBox="0 0 24 24"><path d="M5.5 3.2 19 11.4l-6.2 1.3L9.4 19z" fill="#fff" stroke="#111" stroke-width="1.4" stroke-linejoin="round"/></svg>
+        <div class="label">3 · 鼠标款 B</div>
+      </div>
+    </div>
+
+    <!-- 屏 4：整合（键 + 鼠标 + 涟漪） -->
+    <div class="card full">
+      <h3>屏 4 · 整合效果 <span class="rec">推荐配置</span> <span class="sub">键帽（右下角）+ 鼠标图形（贴键帽左侧）+ 光标涟漪 全联动</span></h3>
+      <div class="screen" data-scene="mix" data-mouse="wire">
+        <div class="win" style="left:5%;top:9%;width:45%;height:50%"><div class="bar"><i></i><i></i><i></i></div></div>
+        <div class="win" style="left:55%;top:15%;width:40%;height:44%"><div class="bar"><i></i><i></i><i></i></div></div>
+        <div class="taskbar"><i></i><i></i><i></i><i></i><i></i></div>
+        <div class="stage"></div>
+        <div class="hud"></div>
+        <svg class="cursor" viewBox="0 0 24 24"><path d="M5.5 3.2 19 11.4l-6.2 1.3L9.4 19z" fill="#fff" stroke="#111" stroke-width="1.4" stroke-linejoin="round"/></svg>
+        <div class="label">4 · 整合</div>
+      </div>
+    </div>
+  </div>
+  <div class="foot"><b>说明：</b>v2 在 v1 键帽风基础上加了「按下/松开/重复计数」与鼠标图形；键盘尺寸、鼠标图形的位置/大小/透明度都能再调。选定后接进产品（Rust 钩子 → 透明置顶穿透窗）。</div>
+</div>
+
+<script>
+(() => {
+  const CURSOR_SVG = 'M5.5 3.2 19 11.4l-6.2 1.3L9.4 19z';
+  const el = (tag, cls, html) => { const d = document.createElement(tag); if (cls) d.className = cls; if (html != null) d.innerHTML = html; return d; };
+
+  // ---------- 鼠标图形 SVG（左/右/中滚轮/侧键，可按件高亮） ----------
+  const mouseFigHTML = () => `
+    <svg viewBox="0 0 44 72">
+      <defs><clipPath id="mclip"><rect x="2" y="2" width="40" height="68" rx="19"/></clipPath></defs>
+      <rect class="mf-body" x="2" y="2" width="40" height="68" rx="19"/>
+      <g clip-path="url(#mclip)">
+        <rect class="mf-btn" data-part="l" x="2" y="2" width="20" height="30"/>
+        <rect class="mf-btn" data-part="r" x="22" y="2" width="20" height="30"/>
+      </g>
+      <rect class="mf-wheel" data-part="wheel" x="19.4" y="8" width="5.2" height="14" rx="2.6"/>
+      <rect class="mf-side" data-part="s" x="0" y="33" width="4.4" height="11" rx="2.2"/>
+      <rect class="mf-side" data-part="s" x="0" y="46" width="4.4" height="11" rx="2.2"/>
+      <line class="mf-div" x1="22" y1="2" x2="22" y2="32"/>
+      <line class="mf-div" x1="2" y1="32" x2="42" y2="32"/>
+    </svg>`;
+  // clipPath id 需唯一（同页多份 SVG 会撞 id）→ 用 id 数组替换
+  let figSeq = 0;
+  function buildFig(container) {
+    const html = mouseFigHTML().replace(/mclip/g, "mclip" + (++figSeq));
+    container.innerHTML = html;
+  }
+
+  // ---------- 涟漪 / 光标 / 滚轮 ----------
+  function moveCursor(screen, x, y) {
+    const cur = screen.querySelector(".cursor");
+    if (!cur) return;
+    cur.style.left = (x * 100) + "%"; cur.style.top = (y * 100) + "%";
+    cur.style.marginLeft = "-2px"; cur.style.marginTop = "-2px";
+  }
+  function ripple(screen, x, y, kind) {
+    const st = screen.querySelector(".stage"); if (!st) return;
+    const r = el("div", "ripple click-" + kind, '<span class="dot"></span>');
+    r.style.left = (x * 100) + "%"; r.style.top = (y * 100) + "%";
+    st.appendChild(r); setTimeout(() => r.remove(), 950);
+  }
+  function wheelHint(screen, dir, x, y) {
+    const st = screen.querySelector(".stage"); if (!st) return;
+    const h = el("div", "wheel-hint", dir === "up" ? "SCROLL ▲" : "SCROLL ▼");
+    h.style.left = (x * 100) + "%"; h.style.top = (y * 100) + "%";
+    st.appendChild(h); setTimeout(() => h.remove(), 1050);
+  }
+  // 鼠标图形高亮
+  function figHit(screen, part, kind) {
+    const fig = screen.querySelector(".mouse-fig"); if (!fig) return;
+    const cls = "hit-" + (part === "wheel" ? "wheel" : kind);
+    fig.classList.add("live");
+    fig.querySelectorAll('[data-part="' + part + '"]').forEach(n => n.classList.add(cls));
+    setTimeout(() => {
+      fig.querySelectorAll("." + cls).forEach(n => n.classList.remove(cls));
+      setTimeout(() => fig.classList.remove("live"), 250);
+    }, 260);
+  }
+
+  // ---------- 键帽组：按下 → （重复计数）→ 松开回弹 → 淡出 ----------
+  function keycapCombo(screen, keys, { small = false } = {}) {
+    const hud = screen.querySelector(".hud"); if (!hud) return null;
+    const combo = el("div", "combo" + (small ? " small" : ""));
+    keys.forEach(k => {
+      const isMod = k.mod;
+      const cap = el("div", "key" + (isMod ? " mod" : ""), k.t);
+      cap.classList.add("pressed");           // 进场即按下态（下沉）
+      cap._isMod = isMod;
+      combo.appendChild(cap);
+    });
+    hud.appendChild(combo);
+    return combo;
+  }
+  function releaseCombo(combo, linger = 850) {
+    if (!combo) return;
+    combo.querySelectorAll(".key").forEach(c => c.classList.remove("pressed")); // 松开：回弹
+    setTimeout(() => { combo.style.opacity = "0"; combo.style.transition = "opacity .45s ease, transform .45s ease"; combo.style.transform = "translateY(-8px)"; setTimeout(() => combo.remove(), 500); }, linger);
+  }
+  function bumpCount(combo) {
+    if (!combo) return;
+    let c = combo.querySelector(".cnt");
+    if (!c) { c = el("span", "cnt", "×1"); c._n = 1; combo.appendChild(c); }
+    else { c._n += 1; c.textContent = "×" + c._n; c.style.animation = "none"; void c.offsetWidth; c.style.animation = ""; }
+    // 重复时键帽轻微脉冲
+    combo.querySelectorAll(".key").forEach(k => { k.style.transform = "translateY(3px) scale(.97)"; setTimeout(() => k.style.transform = "", 90); });
+  }
+
+  const K = (t, mod) => ({ t, mod: !!mod });
+
+  // ---------- 屏 1：键盘三态特写 ----------
+  (() => {
+    const screen = document.querySelector('[data-scene="kb"]');
+    const phase = document.getElementById("kbPhase");
+    const DEMO = [
+      { note: "单键：按下 → 保持 → 松开", keys: [K("A")], hold: 950, repeats: 0 },
+      { note: "组合键：Ctrl + Shift + S", keys: [K("Ctrl", 1), K("Shift", 1), K("S")], hold: 1050, repeats: 0 },
+      { note: "按住不放：重复按下计数 ×N", keys: [K("D")], hold: 3050, repeats: 7, repeatStep: 380 },
+      { note: "快速连点：同一键再次按下继续计数", keys: [K("Enter")], hold: 500, repeats: 2, repeatStep: 420 },
+    ];
+    let i = 0;
+    const run = () => {
+      const ev = DEMO[i % DEMO.length]; i++;
+      phase.textContent = ev.note;
+      const combo = keycapCombo(screen, ev.keys);
+      let n = 0;
+      const tick = setInterval(() => {
+        n++; bumpCount(combo);
+        if (n >= (ev.repeats || 0)) clearInterval(tick);
+      }, ev.repeatStep || 380);
+      setTimeout(() => { clearInterval(tick); releaseCombo(combo, 700); }, ev.hold);
+      setTimeout(run, ev.hold + 1800);
+    };
+    setTimeout(run, 500);
+  })();
+
+  // ---------- 鼠标事件到视觉（涟漪 + 图形高亮） ----------
+  const CLICK_KIND = { l: "l", r: "r", m: "m", s: "s" };
+  function mouseEvent(screen, ev) {
+    const fig = screen.querySelector(".mouse-fig");
+    if (ev.click) {
+      moveCursor(screen, ev.at[0], ev.at[1]);
+      ripple(screen, ev.at[0], ev.at[1], ev.click);
+      centerFig(screen, fig, ev.at);
+      figHit(screen, ev.click === "m" ? "wheel" : ev.click, ev.click === "m" ? "m" : ev.click);
+    } else if (ev.wheel) {
+      moveCursor(screen, ev.at[0], ev.at[1]);
+      wheelHint(screen, ev.wheel, ev.at[0], ev.at[1]);
+      centerFig(screen, fig, ev.at);
+      figHit(screen, "wheel", "wheel"); // 滚轮滚动：滚轮高亮
+    }
+  }
+  // 跟随模式：把图形移到光标旁；角落模式：不做位移
+  function centerFig(screen, fig, at) {
+    if (!fig || screen.dataset.mouse !== "follow") return;
+    fig.style.left = (at[0] * 100) + "%";
+    fig.style.top = (at[1] * 100) + "%";
+    fig.style.marginLeft = "26px";
+    fig.style.marginTop = "-32px";
+    fig.classList.add("pop");
+    clearTimeout(fig._t);
+    fig._t = setTimeout(() => fig.classList.remove("pop"), 1250);
+  }
+
+  const MOUSE_POOL = [
+    { click: "l", at: [.38, .56] }, { click: "r", at: [.64, .36] },
+    { wheel: "up", at: [.48, .5] }, { click: "m", at: [.30, .64] },
+    { click: "s", at: [.74, .6] }, { wheel: "down", at: [.52, .44] },
+    { click: "l", at: [.58, .7] }, { click: "r", at: [.42, .3] },
+  ];
+  const MIX_POOL = [
+    { keys: [K("Ctrl", 1), K("C")], hold: 650 },
+    { click: "l", at: [.4, .58] },
+    { keys: [K("D")], hold: 1500, repeats: 3, repeatStep: 420 },
+    { wheel: "down", at: [.55, .46] },
+    { keys: [K("Ctrl", 1), K("V")], hold: 620 },
+    { click: "r", at: [.66, .4] },
+    { click: "m", at: [.34, .62] },
+    { keys: [K("Enter")], hold: 520 },
+    { click: "s", at: [.72, .58] },
+  ];
+
+  document.querySelectorAll('[data-scene="mouse"]').forEach((screen, si) => {
+    buildFig(screen.querySelector(".mouse-fig") || (() => { const f = el("div", "mouse-fig"); screen.appendChild(f); return f; })());
+    let i = si * 3;
+    const run = () => {
+      mouseEvent(screen, MOUSE_POOL[i++ % MOUSE_POOL.length]);
+      setTimeout(run, 1150 + Math.random() * 600);
+    };
+    setTimeout(run, 500 + si * 300);
+  });
+
+  (() => {
+    const screen = document.querySelector('[data-scene="mix"]');
+    buildFig((() => { const f = el("div", "mouse-fig"); screen.appendChild(f); return f; })());
+    let i = 0;
+    const run = () => {
+      const ev = MIX_POOL[i++ % MIX_POOL.length];
+      if (ev.keys) {
+        const combo = keycapCombo(screen, ev.keys, { small: true });
+        let n = 0;
+        const tick = setInterval(() => { n++; bumpCount(combo); if (n >= (ev.repeats || 0)) clearInterval(tick); }, ev.repeatStep || 400);
+        setTimeout(() => { clearInterval(tick); releaseCombo(combo); }, ev.hold);
+        setTimeout(run, ev.hold + 750);
+      } else {
+        mouseEvent(screen, ev);
+        setTimeout(run, 900 + Math.random() * 350);
+      }
+    };
+    setTimeout(run, 600);
+  })();
+})();
+</script>
+</body>
+</html>
