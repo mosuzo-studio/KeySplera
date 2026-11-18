@@ -160,7 +160,7 @@ KeySplera；Mosuzo Studio；键鼠操作可视化；键帽；按键显示；点�
 
 ## 运行要求
 
-> **Windows 10 / 11（64 位）。** 早期开发中 —— 尚无公开构建，关注 [Releases](https://github.com/mosuzo-studio/KeySplera/releases)；欢迎反馈。
+> **Windows 10 / 11（64 位）。** [下载 v0.1.0](https://github.com/mosuzo-studio/KeySplera/releases/tag/v0.1.0)，或访问[官方网站](https://keysplera.mosuzo.com/zh-cn)。欢迎反馈。
 
 <br/>
 

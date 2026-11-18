@@ -160,7 +160,7 @@ KeySplera; Mosuzo Studio; keystroke overlay; keyboard and mouse overlay; click r
 
 ## Requirements
 
-> **Windows 10 / 11 (64-bit).** In early development — no public build yet; watch [Releases](https://github.com/mosuzo-studio/KeySplera/releases) for it. Feedback is welcome today.
+> **Windows 10 / 11 (64-bit).** [Download v0.1.0](https://github.com/mosuzo-studio/KeySplera/releases/tag/v0.1.0), or visit the [official website](https://keysplera.mosuzo.com). Feedback is welcome.
 
 <br/>
 
